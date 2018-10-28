@@ -11,13 +11,11 @@
 module Example.Section.Sidebar where
 
 import Control.Lens
-import Control.Monad ((<=<))
-import qualified Data.Map as Map
-import Data.Text (Text)
-import qualified Data.Text as T
 import Data.Traversable (for)
 import Reflex.Dom.SemanticUI
 import Reflex.Dom.Core (text)
+
+import qualified Data.Text as T
 
 import Example.QQ
 import Example.Common
@@ -39,10 +37,10 @@ sidebars = Section "Sidebar" (text "A sidebar hides additional content beside a 
   dimming <- toggleButton $ text "Dimming"
   closeOnClick <- toggleButton $ text "Close on click"
   direction <- buttons def $ do
-    toggle <- button def $ text "Toggle"
+    toggle' <- button def $ text "Toggle"
     hide <- button def $ text "Hide"
     show' <- button def $ text "Show"
-    pure $ leftmost [Nothing <$ toggle, Just Out <$ hide, Just In <$ show']
+    pure $ leftmost [Nothing <$ toggle', Just Out <$ hide, Just In <$ show']
 
   sidebar side Out direction
     (def

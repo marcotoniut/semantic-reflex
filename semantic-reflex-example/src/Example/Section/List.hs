@@ -10,7 +10,7 @@
 module Example.Section.List where
 
 import Control.Lens hiding (List)
-import Data.Foldable (for_, traverse_)
+import Data.Foldable (for_)
 import Data.Monoid ((<>))
 import Reflex.Dom.SemanticUI
 import Reflex.Dom.Core (text)

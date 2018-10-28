@@ -11,11 +11,10 @@ module Example.Section.Input where
 
 import Control.Lens
 import Data.Foldable (for_)
+import qualified Data.Map as M
 import Data.Semigroup ((<>))
-import qualified Data.Text as T
-import Data.Text (Text)
 import Reflex.Dom.SemanticUI
-import Reflex.Dom.Core (text, keypress)
+import Reflex.Dom.Core (text)
 
 import Example.QQ
 import Example.Common
@@ -112,11 +111,13 @@ inputs = Section "Input" (text "An input is a field used to elicit a response fr
 
   input (def & inputConfig_labeled |?~ RightLabeled) $ do
     textInput $ def & textInputConfig_placeholder |~ "Search users..."
-    text "TODO: Menu goes here"
-    --menuDropdown (mkDropdownConfig (Just "com") & as |?~ DropdownLabel) $ do
-    --  menuItem "com" def $ text ".com"
-    --  menuItem "net" def $ text ".net"
-    --  menuItem "org" def $ text ".org"
+    let conf = def & dropdownConfig_selection |~ False
+    dropdownWithWrapper (\f -> label' (f def)) conf (Identity "com") never $
+      TaggedStatic $ M.fromList $
+        [ ("com", text ".com")
+        , ("net", text ".net")
+        , ("org", text ".org")
+        ]
 
   divider $ def & dividerConfig_hidden |~ True
 
@@ -172,21 +173,26 @@ inputs = Section "Input" (text "An input is a field used to elicit a response fr
   input (def & inputConfig_action |?~ RightAction & inputConfig_icon |?~ LeftIcon) $ do
     icon "search" def
     textInput $ def & textInputConfig_placeholder |~ "Search..."
-    text "TODO: Menu goes here"
-    --menuDropdown (mkDropdownConfig (Just "page") & as |?~ DropdownButton) $ do
-    --  menuItem "page" def $ text "This Page"
-    --  menuItem "org" def $ text "This Organisation"
-    --  menuItem "site" def $ text "Entire Site"
+    let wrapper f = ui' "div" (f $ def & classes .~ "button")
+        conf = def & dropdownConfig_selection |~ False
+    dropdownWithWrapper wrapper conf (Identity "page") never $
+      TaggedStatic $ M.fromList $
+        [ ("page", text "This Page")
+        , ("org", text "This Organisation")
+        , ("side", text "Entire Site")
+        ]
 
   divider $ def & dividerConfig_hidden |~ True
 
   input (def & inputConfig_action |?~ RightAction) $ do
     textInput $ def & textInputConfig_placeholder |~ "Search..."
-    text "TODO: Menu goes here"
-    --menuDropdown (mkDropdownConfig (Just "all") & compact |~ True & selection |~ True) $ do
-    --  menuItem "all" def $ text "All"
-    --  menuItem "articles" def $ text "Articles"
-    --  menuItem "products" def $ text "Products"
+    let conf = def & dropdownConfig_compact |~ True
+    dropdown conf (Identity "all") never $
+      TaggedStatic $ M.fromList $
+        [ ("all", text "All")
+        , ("articles", text "Articles")
+        , ("products", text "Products")
+        ]
     button def $ text "Search"
 
   divider $ def & dividerConfig_hidden |~ True

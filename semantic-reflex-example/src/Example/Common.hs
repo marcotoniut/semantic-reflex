@@ -12,15 +12,16 @@
 module Example.Common where
 
 import Control.Lens
-import Control.Monad.Fix (MonadFix)
 import Control.Monad ((<=<), void)
+import Control.Monad.Fix (MonadFix)
 import Data.Bool (bool)
 import Data.Default
 import Data.Foldable (traverse_, for_)
 import Data.Semigroup ((<>))
 import Data.Text (Text)
-import qualified Data.Text as T
 import Reflex.Dom.SemanticUI
+
+import qualified Data.Text as T
 
 import Example.QQ
 
@@ -30,7 +31,7 @@ data Section t m = Section
   , sectionContent :: m ()
   }
 
-removableWidget :: MonadWidget t m => Event t () -> m (Event t ()) -> m ()
+removableWidget :: UI t m => Event t () -> m (Event t ()) -> m ()
 removableWidget restore widget = do
   rec res <- widgetHold widget $ leftmost
         [ never <$ blank <$ switch (current res)
@@ -60,6 +61,18 @@ instance DynShow t (Checkbox t) where
       , pure "\n  }"
       ]
 
+instance Show a => DynShow t (Dropdown t a) where
+  dynShow Dropdown {..} = do
+    change <- countWithLast _dropdown_change
+    pure $ mconcat
+      [ pure "Dropdown"
+      , (("\n  { _dropdown_value = " <>) . show) <$> _dropdown_value
+      , (("\n  , _dropdown_search = " <>) . T.unpack) <$> _dropdown_search
+      , (("\n  , _dropdown_change = " <>) . show) <$> change
+      , (("\n  , _dropdown_open = " <>) . show) <$> _dropdown_open
+      , pure "\n  }"
+      ]
+
 instance DynShow t (Progress t m) where
   dynShow Progress {..} = do
     pure $ mconcat
@@ -70,14 +83,14 @@ instance DynShow t (Progress t m) where
 
 instance DynShow t (TextInput t) where
   dynShow TextInput {..} = do
-    input <- countWithLast _textInput_input
+    inputcount <- countWithLast _textInput_input
     keypress <- countWithLast _textInput_keypress
     keydown <- countWithLast _textInput_keydown
     keyup <- countWithLast _textInput_keyup
     pure $ mconcat
       [ pure "TextInput"
       , (("\n  { _textInput_value = " <>) . show) <$> _textInput_value
-      , (("\n  , _textInput_input = " <>) . show) <$> input
+      , (("\n  , _textInput_input = " <>) . show) <$> inputcount
       , (("\n  , _textInput_keypress = " <>) . show) <$> keypress
       , (("\n  , _textInput_keydown = " <>) . show) <$> keydown
       , (("\n  , _textInput_keyup = " <>) . show) <$> keyup
@@ -85,15 +98,15 @@ instance DynShow t (TextInput t) where
       , pure "\n  }"
       ]
 
-dynShowCode :: (MonadWidget t m, DynShow t a) => a -> m ()
+dynShowCode :: (UI t m, DynShow t a) => a -> m ()
 dynShowCode a = do
   a' <- dynShow a
   void $ dyn $ hscode <$> a'
 
-dynCode :: (MonadWidget t m, Show a) => Dynamic t a -> m ()
+dynCode :: (UI t m, Show a) => Dynamic t a -> m ()
 dynCode d = void $ dyn $ hscode . show <$> d
 
-simpleLink :: MonadWidget t m => Text -> m ()
+simpleLink :: UI t m => Text -> m ()
 simpleLink url = void $ hyperlink url $ text url
 
 orElse :: a -> a -> Bool -> a
@@ -114,7 +127,7 @@ instance Applicative m => Default (ExampleConf t m a) where
     , _dynamic = Nothing
     }
 
-upstreamIssue :: MonadWidget t m => Int -> Text -> m ()
+upstreamIssue :: UI t m => Int -> Text -> m ()
 upstreamIssue issue msg = message def $ paragraph $ do
   icon "warning sign" def
   text msg
@@ -125,7 +138,7 @@ upstreamIssue issue msg = message def $ paragraph $ do
     url = "https://github.com/Semantic-Org/Semantic-UI/issues/" <> tshow issue
 
 mkExample
-  :: MonadWidget t m
+  :: UI t m
   => Text -> ExampleConf t m a -> (String, Either (m a) (Event t () -> m a))
   -> m () -- (El t, a)
 mkExample name ExampleConf {..} (code, eitherWidget)

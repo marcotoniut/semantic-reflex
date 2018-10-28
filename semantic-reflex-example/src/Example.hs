@@ -1,3 +1,4 @@
+{-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -20,18 +21,19 @@ import Control.Monad (void, (<=<))
 import Data.Bool (bool)
 import Data.FileEmbed
 import Data.Foldable (for_)
+import Data.Functor.Identity
 import Data.Maybe (mapMaybe)
 import Data.Monoid ((<>))
 import Data.Text (Text)
 import Reflex.Dom.SemanticUI
 import Reflex.Dom.Core (text)
-import Reflex.Dom.Routing.Writer
-import Reflex.Dom.Routing.Nested
 import Language.Javascript.JSaddle hiding ((!!))
+import Obelisk.Route
+import Obelisk.Route.Frontend
+import Obelisk.Route.TH
 
 import qualified Data.Map as M
 import qualified Data.Text as T
-import qualified Data.Text.Encoding as T
 
 import Example.QQ
 import Example.Common
@@ -50,8 +52,18 @@ import Example.Section.List (lists)
 import Example.Section.Message (messages)
 import Example.Section.Progress (progressSection)
 import Example.Section.Sidebar (sidebars)
-import Example.Section.RadioGroup (radioGroups)
 import Example.Section.Transition (transitions)
+
+data Route a where
+  Route_Main :: Route ()
+  Route_Section :: Route Text
+
+deriveRouteComponent ''Route
+
+data BackendRoute a where
+  BackendRoute_Missing :: BackendRoute ()
+
+deriveRouteComponent ''BackendRoute
 
 data Category t m = Category
   { categoryName :: Text
@@ -133,7 +145,7 @@ progressProgress = progress (pure $ Range 0 vMax) (pure v) $ def
       PartiallyImplemented -> 1
       Implemented -> 2
 
-intro :: forall t m. (RouteWriter t Text m, MonadWidget t m) => Section t m
+intro :: forall t m. MonadWidget t m => Section t m
 intro = Section "Introduction" blank $ do
   paragraph $ do
     text "This library aims to provide a type safe Haskell wrapper around Semantic UI components, to allow easy construction of nice looking web applications in GHCJS. It is currently in early development and started as a fork of the "
@@ -174,7 +186,7 @@ intro = Section "Introduction" blank $ do
       tbody $ for_ items $ \(item, status, mWidget) -> tr $ do
         td $ case mWidget of
           Nothing -> text item
-          Just _ -> hyperlink ("#" <> toId item) $ text item
+          Just _ -> hyperlink (routeText $ Route_Section :/ toId item) $ text item
         case status of
           Implemented -> elClass "td" "positive" $ text "Implemented"
           NotImplemented -> elClass "td" "negative" $ text "Not implemented"
@@ -193,19 +205,30 @@ intro = Section "Introduction" blank $ do
     hscode $(printDefinition id id ''TaggedActive)
   paragraph $ text "This is used in the dropdown implementation."
 
+routeText :: R Route -> Text
+routeText = T.intercalate "/" . fst . encode routeEncoder
+
 -- | Convert a component name to a css id string
 toId :: Text -> Text
 toId = T.intercalate "-" . T.words . T.toLower
 
 main :: JSM ()
-main = mainWidgetWithHead headContents runWithLoader
+main = mainWidgetWithHead headContents $ do
+  runRouteViewT routeEncoder runWithLoader
+
+routeEncoder
+  :: Encoder Identity Identity (R Route) PageName
+routeEncoder = either (error . T.unpack) id $ checkEncoder $
+  handleEncoder (\_ -> Route_Main :/ ()) $ pathComponentEncoder $ \case
+    Route_Main -> PathEnd $ unitEncoder mempty
+    Route_Section -> PathSegment "section" singlePathSegmentEncoder
 
 headContents :: DomBuilder t m => m ()
 headContents = do
   elAttr "link" ("rel" =: "stylesheet" <> "href" =: "https://cdn.jsdelivr.net/npm/semantic-ui@2.3.3/dist/semantic.min.css") blank
   el "style" $ text $(makeRelativeToProject "resources/styling.css" >>= embedStringFile)
 
-testApp :: MonadWidget t m => m ()
+testApp :: UI t m => m ()
 testApp = do
   tog <- toggle True <=< button def $ text "Toggle"
   dyn $ ffor tog $ \case
@@ -215,21 +238,23 @@ testApp = do
     True -> for_ [1 :: Int ..2000] $ \i -> button def $ text $ "Static " <> tshow i
   pure ()
 
-runWithLoader :: MonadWidget t m => m ()
+type ObeliskWidget t x r m = (MonadWidget t m, SetRoute t r m, Routed t r m)
+
+runWithLoader :: (DomBuilderSpace m ~ GhcjsDomSpace, ObeliskWidget t x (R Route) m) => m ()
 runWithLoader = do
   pb <- delay 0 =<< getPostBuild
   rec loadingDimmer pb'
-      liftJSM syncPoint
       pb' <- fmap updated $ widgetHold blank $ app <$ pb
   return ()
 
-loadingDimmer :: MonadWidget t m => Event t () -> m ()
-loadingDimmer evt = do
-  void $ dimmer (def & dimmerConfig_page .~ True & action ?~ def { _action_transition = Transition Fade (Just Out) def <$ evt }) $
+loadingDimmer :: ObeliskWidget t x (R Route) m => Event t () -> m ()
+loadingDimmer evt =
+  dimmer (def & dimmerConfig_page .~ True & action ?~
+    (def & action_event ?~ (Transition Fade def <$ evt))) $
     divClass "ui huge text loader" $ text "Loading semantic-reflex docs..."
 
-app :: forall t m. MonadWidget t m => m ()
-app = runRouteWithPathInFragment $ fmap snd $ runRouteWriterT $ do
+app :: forall t m x. (DomBuilderSpace m ~ GhcjsDomSpace, ObeliskWidget t x (R Route) m) => m ()
+app = do
 
   -- Header
   segment (def & attrs |~ ("id" =: "masthead") & segmentConfig_vertical |~ True) $
@@ -240,12 +265,13 @@ app = runRouteWithPathInFragment $ fmap snd $ runRouteWriterT $ do
       (e, _) <- pageHeader' H1 conf $ do
         text "Semantic UI for Reflex-DOM"
         subHeader $ text "Documentation and examples"
-      tellRoute $ [] <$ domEvent Click e
+      setRoute $ Route_Main :/ () <$ domEvent Click e
       hackageButton
       githubButton
 
-  let sections = M.insert Nothing intro $ M.fromList
-        $ mapMaybe (\(name, _, mSection) -> (,) (Just $ toId name) <$> mSection)
+  let sections :: M.Map Text (Section t m)
+      sections = M.fromList
+        $ mapMaybe (\(name, _, mSection) -> (,) (toId name) <$> mSection)
         $ concatMap categoryItems progressTable
       mainConfig =  def
         & elConfigAttributes |~ ("id" =: "main")
@@ -270,28 +296,30 @@ app = runRouteWithPathInFragment $ fmap snd $ runRouteWriterT $ do
     let s = Style "overflow: auto"
     rail RightRail (def & railConfig_dividing |~ True & style |~ s) $ sticky def $ do
       (e, _) <- pageHeader' H4 linkHeaderConfig $ text "Introduction"
-      tellRoute $ [] <$ domEvent Click e
+      setRoute $ Route_Main :/ () <$ domEvent Click e
       for_ (progressTable @t @m) $ \Category {..} -> mdo
         (e, _) <- pageHeader' H4 (categoryConfig isOpen) $ text categoryName
         isOpen <- toggle False $ domEvent Click e
         ui "div" (wrapper $ domEvent Click e) $
           menu (def & menuConfig_vertical |~ True & menuConfig_secondary |~ True) $ do
-            for_ categoryItems $ \(item, status, mWidget) -> do
-              case mWidget of
-                Nothing -> menuItem (def & menuItemConfig_disabled |~ True) $ do
-                  text $ item <> " (No examples)"
-                Just _ -> do
-                  (e, _) <- menuItem' def $ text item
-                  tellRoute $ [toId item] <$ domEvent Click e
+            for_ categoryItems $ \(item, _status, mWidget) -> for_ mWidget $ \_ -> do
+              (e, _) <- menuItem' def $ text item
+              setRoute $ Route_Section :/ toId item <$ domEvent Click e
       divider $ def & dividerConfig_hidden |~ True
 
-    withRoute $ \route -> case M.lookup route sections of
-      Nothing -> localRedirect []
-      Just (Section heading subHeading child) -> do
-        pageHeader H2 (def & style |~ Style "margin-top: 0.5em") $ do
-          text heading
-          subHeader subHeading
-        child
+    route <- askRoute
+    dyn_ $ ffor route $ \r -> case r of
+      Route_Main :/ () -> sectionContent intro
+      Route_Section :/ s -> case M.lookup s sections of
+        Nothing -> do
+          pb <- getPostBuild
+          setRoute $ Route_Main :/ () <$ pb
+        Just (Section heading subHeading child) -> do
+          pageHeader H2 (def & style |~ Style "margin-top: 0.5em") $ do
+            text heading
+            subHeader subHeading
+          child
+      _ -> pure ()
 
   -- Footer
   segment (def & segmentConfig_vertical |~ True
@@ -306,11 +334,11 @@ app = runRouteWithPathInFragment $ fmap snd $ runRouteWriterT $ do
     let url = "https://www.creativetail.com/40-free-flat-animal-icons/"
     hyperlink url $ text "Creative Tail"
 
-semanticLogo :: MonadWidget t m => m ()
+semanticLogo :: UI t m => m ()
 semanticLogo = image (def & imageConfig_shape |?~ Rounded) $ Left $ Img url def
   where url = "https://semantic-ui.com/images/logo.png"
 
-githubButton :: MonadWidget t m => m ()
+githubButton :: UI t m => m ()
 githubButton = void $ button conf $ do
   icon "github" def
   text "GitHub"
@@ -320,6 +348,6 @@ githubButton = void $ button conf $ do
       & buttonConfig_type .~ LinkButton & buttonConfig_color |?~ Teal
       & attrs |~ ("href" =: url)
 
-hackageButton :: MonadWidget t m => m ()
+hackageButton :: UI t m => m ()
 hackageButton = void $ button conf $ text "Hackage"
   where conf = def & buttonConfig_type .~ LinkButton & buttonConfig_disabled |~ True

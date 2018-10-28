@@ -52,7 +52,8 @@ library
     , mtl
     , reflex-dom
     , reflex-dom-core >= 0.4 && < 0.5
-    , reflex-dom-nested-routing
+    , obelisk-frontend
+    , obelisk-route
     , random
     , semantic-reflex
     , transformers

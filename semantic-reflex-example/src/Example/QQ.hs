@@ -6,24 +6,19 @@
 
 module Example.QQ where
 
-import Language.Haskell.TH (ExpQ, reify, pprint, runIO)
-import Language.Haskell.TH.Syntax (Name)
-import Language.Haskell.TH.Quote (QuasiQuoter(..))
-import qualified Language.Haskell.Exts as Exts
--- For parsing the haskell strings to template-haskell AST
-import Language.Haskell.Meta (parseExp, toExp)
-import Language.Haskell.Meta.Utils (eitherQ)
-
-import Data.Char (isUpper, isAlpha, isAlphaNum, isNumber)
-
-import Language.Haskell.HsColour.Classify (tokenise)
-import Language.Haskell.HsColour.CSS (renderToken)
-
 import Control.Monad (void)
-
-import Reflex.Dom.SemanticUI hiding (parseType)
+import Data.Char (isUpper, isAlpha, isAlphaNum, isNumber)
+import Data.Foldable (traverse_)
 import Data.Text (Text)
+import Language.Haskell.Meta (toExp)
+import Language.Haskell.TH (ExpQ, reify, pprint, runIO)
+import Language.Haskell.TH.Quote (QuasiQuoter(..))
+import Language.Haskell.TH.Syntax (Name)
+import Reflex.Dom.SemanticUI hiding (parseType)
+
 import qualified Data.Text as T
+import qualified Language.Haskell.Exts as Exts
+import qualified Language.Haskell.HsColour.Classify as HsColour
 
 mymode :: Exts.ParseMode
 mymode = Exts.defaultParseMode
@@ -71,16 +66,36 @@ printDefinition postproc preproc name = do
       runIO $ putStrLn $ stripModules $ pprint info
       fail str'
 
-hscode :: MonadWidget t m => String -> m ()
+hscode :: UI t m => String -> m ()
 hscode = void . elAttr "code" ("class" =: "haskell")
-       . elDynHtml' "pre" . pure . hscolour
+       . el "pre" . hscolour
 
-hsCodeInline :: MonadWidget t m => String -> m ()
+hsCodeInline :: UI t m => String -> m ()
 hsCodeInline = void . elAttr "code" ("class" =: "haskell inline")
-             . elDynHtml' "pre" . constDyn . hscolour
+             . el "pre" . hscolour
 
-hscolour :: String -> Text
-hscolour = T.strip . T.pack . concatMap renderToken . tokenise . unindent
+hscolour :: DomBuilder t m => String -> m ()
+hscolour = traverse_ renderToken' . HsColour.tokenise . unindent
+
+renderToken' :: DomBuilder t m => (HsColour.TokenType,String) -> m ()
+renderToken' (cls,s) = elClass "span" (cssClass cls) $ text $ T.pack s
+
+cssClass :: HsColour.TokenType -> Text
+cssClass HsColour.Keyword  = "hs-keyword"
+cssClass HsColour.Keyglyph = "hs-keyglyph"
+cssClass HsColour.Layout   = "hs-layout"
+cssClass HsColour.Comment  = "hs-comment"
+cssClass HsColour.Conid    = "hs-conid"
+cssClass HsColour.Varid    = "hs-varid"
+cssClass HsColour.Conop    = "hs-conop"
+cssClass HsColour.Varop    = "hs-varop"
+cssClass HsColour.String   = "hs-str"
+cssClass HsColour.Char     = "hs-chr"
+cssClass HsColour.Number   = "hs-num"
+cssClass HsColour.Cpp      = "hs-cpp"
+cssClass HsColour.Error    = "hs-sel"
+cssClass HsColour.Definition = "hs-definition"
+cssClass _        = ""
 
 oneline :: String -> String
 oneline "" = ""

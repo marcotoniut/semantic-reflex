@@ -15,12 +15,10 @@
 
 module Example.Section.Progress where
 
-import Data.Proxy
 import Control.Lens
 import Control.Monad.IO.Class (MonadIO(..))
 import Control.Monad ((<=<), guard)
 import Data.Foldable (for_)
-import Data.Maybe (fromJust)
 import Data.Semigroup ((<>))
 import Reflex.Dom.SemanticUI
 import Reflex.Dom.Core (text)
@@ -261,8 +259,7 @@ progressSection = Section "Progress" blank $ do
 
   mkExample "Size" (def
     & subtitle ?~ text "A progress bar can vary in size")
-    [resetExample|
-  \reset -> do
+    [example|
     for_ [Tiny .. Big] $ \size ->
       progress (pure $ Range 0 100) (pure 40) $ def
         & progressConfig_size |?~ size
@@ -271,16 +268,14 @@ progressSection = Section "Progress" blank $ do
 
   mkExample "Color" (def
     & subtitle ?~ text "A progress bar can have different colors")
-    [resetExample|
-  \reset -> do
+    [example|
     for_ [minBound .. maxBound] $ \color ->
       progress (pure $ Range 0 100) (pure 40) $ def & progressConfig_color |?~ color
   |]
 
   mkExample "Inverted Color" (def
     & subtitle ?~ text "A progress bar color can be inverted for improved contrast on dark backgrounds")
-    [resetExample|
-  \reset -> do
+    [example|
     segment (def & segmentConfig_inverted |~ True) $ do
       for_ [minBound .. maxBound] $ \color ->
         progress (pure $ Range 0 100) (pure 40) $ def & progressConfig_color |?~ color & progressConfig_inverted |~ True

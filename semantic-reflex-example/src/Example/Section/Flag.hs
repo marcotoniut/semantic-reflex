@@ -19,7 +19,7 @@ import Example.QQ
 import Example.Common
 import Example.CountryEnum
 
-flags :: MonadWidget t m => Section t m
+flags :: UI t m => Section t m
 flags = Section "Flag" (text "A flag is used to represent a political state") $ do
 
   paragraph $ do

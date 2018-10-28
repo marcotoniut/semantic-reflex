@@ -10,6 +10,7 @@
 module Example.Section.Label where
 
 import Control.Lens
+import Control.Monad (void)
 import Data.Foldable (traverse_)
 import Data.Semigroup ((<>))
 import qualified Data.Text as T
@@ -51,7 +52,7 @@ labels = Section "Label" blank $ do
   mkExample "Pointing" (def
     & subtitle ?~ text "A label can point to adjacent content")
     [example|
-  input (def & inputConfig_fluid |~ True) $ textInput def
+  void $ input (def & inputConfig_fluid |~ True) $ textInput def
   label (def & labelConfig_pointing |?~ AbovePointing) $
     text "Please enter a value"
 
@@ -59,11 +60,11 @@ labels = Section "Label" blank $ do
 
   label (def & labelConfig_pointing |?~ BelowPointing) $
     text "Please enter a value"
-  input (def & inputConfig_fluid |~ True) $ textInput def
+  void $ input (def & inputConfig_fluid |~ True) $ textInput def
 
   divider def
 
-  input def $ textInput def
+  void $ input def $ textInput def
   label (def & labelConfig_pointing |?~ LeftPointing) $
     text "That name is taken!"
 
@@ -71,7 +72,7 @@ labels = Section "Label" blank $ do
 
   label (def & labelConfig_pointing |?~ RightPointing) $
     text "Your password must be 6 characters or more"
-  input def $ textInput def
+  void $ input def $ textInput def
   |]
 
   mkExample "Corner" (def
